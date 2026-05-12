@@ -28,6 +28,7 @@ func Status(ctx context.Context, job Job) (JobStatus, error) {
 		if job.Domain.Protected() && st.State == StateUnknown {
 			st.State = StateProtected
 		}
+		st.State = ClassifyScheduled(job, st)
 		return st, nil
 	}
 
@@ -36,6 +37,7 @@ func Status(ctx context.Context, job Job) (JobStatus, error) {
 	if listErr == nil {
 		all := ParseListOutput(list)
 		if st, found := all[job.Label]; found {
+			st.State = ClassifyScheduled(job, st)
 			return st, nil
 		}
 	}
@@ -45,7 +47,9 @@ func Status(ctx context.Context, job Job) (JobStatus, error) {
 	if job.Domain.Protected() {
 		return JobStatus{Label: job.Label, State: StateProtected, Message: "needs sudo"}, nil
 	}
-	return JobStatus{Label: job.Label, State: StateStopped, Message: strings.TrimSpace(out)}, nil
+	st := JobStatus{Label: job.Label, State: StateStopped, Message: strings.TrimSpace(out)}
+	st.State = ClassifyScheduled(job, st)
+	return st, nil
 }
 
 // Print returns the raw `launchctl print` output — handy for a "show me the

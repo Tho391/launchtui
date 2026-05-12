@@ -10,6 +10,7 @@ package launchd
 import (
 	"os/user"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -98,6 +99,10 @@ const (
 	StateCrashed  // last exit code != 0
 	StateThrottled
 	StateProtected // belongs to a domain we cannot control without sudo
+	// StateScheduled is loaded-with-schedule-but-no-current-PID. Distinguishes
+	// recurring jobs (StartInterval / StartCalendarInterval / RunAtLoad)
+	// waiting for their next fire from genuinely idle ones.
+	StateScheduled
 )
 
 func (s State) String() string {
@@ -114,6 +119,8 @@ func (s State) String() string {
 		return "throttled"
 	case StateProtected:
 		return "protected"
+	case StateScheduled:
+		return "scheduled"
 	default:
 		return "unknown"
 	}
@@ -132,6 +139,47 @@ type Job struct {
 	Disabled    bool
 	RunAtLoad   bool
 	KeepAlive   bool
+	Schedule    Schedule
+}
+
+// Schedule captures the firing triggers extracted from a job's plist —
+// StartInterval (seconds), StartCalendarInterval (one or many calendar
+// events), and RunAtLoad. It is filled in during Discover so the UI can
+// label idle-but-recurring jobs as "scheduled" instead of "loaded".
+type Schedule struct {
+	Interval int             // seconds; 0 means no StartInterval set
+	Calendar []CalendarEvent // zero or more StartCalendarInterval entries
+}
+
+// CalendarEvent mirrors one StartCalendarInterval dict. Fields are -1 when
+// the corresponding key was absent from the plist; an absent field in
+// launchd means "match any value", so unset is meaningful.
+type CalendarEvent struct {
+	Minute  int
+	Hour    int
+	Day     int
+	Weekday int
+	Month   int
+}
+
+// HasSchedule reports whether the job will be triggered without a manual
+// kickstart — i.e. RunAtLoad, a StartInterval, or any StartCalendarInterval.
+func (j Job) HasSchedule() bool {
+	return j.RunAtLoad || j.Schedule.Interval > 0 || len(j.Schedule.Calendar) > 0
+}
+
+// IsAppleSystem reports whether a job is "owned by macOS" for hide-by-default
+// purposes — labels in the com.apple.* namespace and any plist that lives
+// under /System/Library/LaunchDaemons. Used by both the TUI's A toggle and
+// `launchtui list` (which excludes these unless --all is passed).
+func (j Job) IsAppleSystem() bool {
+	if strings.HasPrefix(strings.ToLower(j.Label), "com.apple.") {
+		return true
+	}
+	if strings.HasPrefix(j.PlistPath, "/System/Library/LaunchDaemons") {
+		return true
+	}
+	return false
 }
 
 // JobStatus is the live state of a job as reported by `launchctl print`

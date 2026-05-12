@@ -17,6 +17,7 @@ var (
 	colorCrashed   = lipgloss.Color("#F85149")
 	colorThrottled = lipgloss.Color("#E3B341")
 	colorProtected = lipgloss.Color("#58A6FF")
+	colorScheduled = lipgloss.Color("#79C0FF")
 	colorWarn      = lipgloss.Color("#E3B341")
 )
 
@@ -46,6 +47,8 @@ func renderBadge(s launchd.State) string {
 		return lipgloss.NewStyle().Foreground(colorThrottled).Render("⚠")
 	case launchd.StateProtected:
 		return lipgloss.NewStyle().Foreground(colorProtected).Render("◆")
+	case launchd.StateScheduled:
+		return lipgloss.NewStyle().Foreground(colorScheduled).Render("◷")
 	default:
 		return lipgloss.NewStyle().Foreground(colorDim).Render("?")
 	}
@@ -61,6 +64,8 @@ func renderStateText(s launchd.State) string {
 		return lipgloss.NewStyle().Foreground(colorThrottled).Render(s.String())
 	case launchd.StateProtected:
 		return lipgloss.NewStyle().Foreground(colorProtected).Render(s.String())
+	case launchd.StateScheduled:
+		return lipgloss.NewStyle().Foreground(colorScheduled).Render(s.String())
 	default:
 		return lipgloss.NewStyle().Foreground(colorDim).Render(s.String())
 	}

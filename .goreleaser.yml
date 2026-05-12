@@ -68,22 +68,33 @@ release:
   # Tags like v0.1.0-rc1 / v0.1.0-beta.2 ship as GitHub prereleases automatically.
   prerelease: auto
 
-brews:
+# Homebrew Cask (not Formula). `brews:` was deprecated in GoReleaser v2.10 in
+# favor of `homebrew_casks:` — Casks are now the recommended way to ship
+# pre-compiled binaries via brew. The user-facing install command is identical
+# (`brew install Tho391/tap/launchtui`); brew finds both kinds in a tap.
+homebrew_casks:
   - name: launchtui
     repository:
       owner: Tho391
       name: homebrew-tap
       branch: main
       token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
-    directory: Formula
+    binaries:
+      - launchtui
     homepage: 'https://github.com/Tho391/launchtui'
     description: 'Fast, keyboard-driven terminal UI for managing launchd jobs on macOS.'
-    license: MIT
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    commit_msg_template: 'chore(brew): bump launchtui to {{ .Tag }}'
-    install: |
-      bin.install "launchtui"
-    test: |
-      assert_match "launchtui", shell_output("#{bin}/launchtui --version")
+    commit_msg_template: 'chore(cask): bump launchtui to {{ .Tag }}'
+    # Without an Apple Developer Account ($99/yr) we can't notarize the binary,
+    # which would otherwise trip Gatekeeper's "launchtui is damaged and can't
+    # be opened" on first run. Strip the quarantine xattr on install — the
+    # standard workaround for unsigned tap binaries. See:
+    # https://goreleaser.com/customization/homebrew_casks/#signing-and-notarizing
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/launchtui"]
+          end

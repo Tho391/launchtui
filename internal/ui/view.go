@@ -48,13 +48,38 @@ func (m *Model) View() string {
 	detail := m.renderDetail(detailWidth, bodyHeight)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	screen := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	if m.pendingAction != "" {
+		modal := m.renderConfirm()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal, lipgloss.WithWhitespaceChars(" "))
+	}
+	return screen
+}
+
+func (m *Model) renderConfirm() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", styleTitle.Render("confirm: "+m.pendingAction))
+	fmt.Fprintf(&b, "%s %s\n\n", styleKey.Render("job"), m.pendingJob.Label)
+	fmt.Fprintf(&b, "%s %s\n\n", styleKey.Render("cmd"), m.pendingPreview)
+	b.WriteString(styleSubtle.Render("y / Enter confirm   ·   n / Esc cancel"))
+	return styleBorder.Padding(1, 2).Render(b.String())
 }
 
 func (m *Model) renderHeader() string {
 	title := styleTitle.Render("launchtui")
 	visible := fmt.Sprintf("%d / %d", len(m.filtered), len(m.jobs))
-	counts := styleSubtle.Render("jobs: " + visible)
+
+	badges := []string{"jobs: " + visible}
+	if m.statusFilter != filterAll {
+		badges = append(badges, "state: "+m.statusFilter.String())
+	}
+	if m.sortMode != sortByLabel {
+		badges = append(badges, "sort: "+m.sortMode.String())
+	}
+	if m.hideApple && m.hiddenAppleCount > 0 {
+		badges = append(badges, fmt.Sprintf("%d hidden (A to show)", m.hiddenAppleCount))
+	}
+	counts := styleSubtle.Render(strings.Join(badges, "  ·  "))
 
 	var filterView string
 	if m.filtering {
@@ -101,21 +126,26 @@ func (m *Model) renderList(width, height int) string {
 			}
 		}
 		badge := renderBadge(st.State)
-		label := job.Label
-		// Truncate so we never spill into the detail pane.
-		maxLabelWidth := width - 8
+		var trailer string
+		if st.State == launchd.StateCrashed && st.LastExitCode != 0 {
+			trailer = fmt.Sprintf(" (%d)", st.LastExitCode)
+		} else if sched := launchd.FormatSchedule(job.Schedule, job.RunAtLoad); sched != "" && st.State == launchd.StateScheduled {
+			trailer = " · " + sched
+		}
+		// Reserve room for the badge, gutter, and trailer so the label
+		// truncates first instead of spilling into the detail pane.
+		const gutter = 4
+		maxLabelWidth := width - gutter - lipgloss.Width(trailer)
 		if maxLabelWidth < 8 {
 			maxLabelWidth = 8
 		}
+		label := job.Label
 		if len(label) > maxLabelWidth {
 			label = label[:maxLabelWidth-1] + "…"
 		}
-		line := badge + " " + label
-		if st.State == launchd.StateCrashed && st.LastExitCode != 0 {
-			line += styleSubtle.Render(fmt.Sprintf(" (%d)", st.LastExitCode))
-		}
+		line := badge + " " + label + styleSubtle.Render(trailer)
 		if i == m.cursor {
-			line = styleSelected.Render("▸ " + strings.TrimPrefix(line, ""))
+			line = styleSelected.Render("▸ " + line)
 		} else {
 			line = "  " + line
 		}
@@ -152,6 +182,9 @@ func (m *Model) renderDetail(width, height int) string {
 	row("PID", pidStr)
 	row("LastExit", fmt.Sprintf("%d", st.LastExitCode))
 	row("Disabled", fmt.Sprintf("%v", j.Disabled))
+	if sched := launchd.FormatSchedule(j.Schedule, j.RunAtLoad); sched != "" {
+		row("Schedule", sched)
+	}
 	if j.StdoutPath != "" {
 		row("Stdout", j.StdoutPath)
 	}
@@ -197,14 +230,16 @@ func (m *Model) renderDetail(width, height int) string {
 func (m *Model) renderFooter() string {
 	parts := []string{
 		styleKey.Render("j/k") + " move",
-		styleKey.Render("s") + " start",
-		styleKey.Render("S") + " stop",
-		styleKey.Render("r") + " restart",
-		styleKey.Render("L") + " load",
-		styleKey.Render("U") + " unload",
+		styleKey.Render("s/S/r") + " start/stop/restart",
+		styleKey.Render("L/U") + " load/unload",
+		styleKey.Render("o") + " reveal",
+		styleKey.Render("e") + " edit",
+		styleKey.Render("y") + " yank",
 		styleKey.Render("l") + " log",
 		styleKey.Render("/") + " filter",
-		styleKey.Render("R") + " refresh",
+		styleKey.Render("F") + " state",
+		styleKey.Render("O") + " sort",
+		styleKey.Render("A") + " apple",
 		styleKey.Render("?") + " help",
 		styleKey.Render("q") + " quit",
 	}
@@ -217,12 +252,18 @@ func (m *Model) renderHelp() string {
 		{"k / ↑", "move up"},
 		{"g / G", "jump to top / bottom"},
 		{"^D / ^U", "half page down / up"},
-		{"/", "filter labels (fuzzy)"},
-		{"s", "start the selected job"},
-		{"S", "stop the selected job"},
-		{"r", "restart the selected job"},
-		{"L", "bootstrap (load) the selected job"},
-		{"U", "bootout (unload) the selected job"},
+		{"/", "filter labels and plist paths"},
+		{"F", "cycle status filter (all → running → crashed → throttled → scheduled → protected)"},
+		{"O", "cycle sort (label → state → domain → last-exit)"},
+		{"A", "toggle Apple / system jobs (hidden by default)"},
+		{"s", "start the selected job (with confirmation)"},
+		{"S", "stop the selected job (with confirmation)"},
+		{"r", "restart the selected job (with confirmation)"},
+		{"L", "bootstrap (load) the selected job (with confirmation)"},
+		{"U", "bootout (unload) the selected job (with confirmation)"},
+		{"o", "reveal plist in Finder (open -R)"},
+		{"e", "open plist in $EDITOR (read-only viewer)"},
+		{"y", "yank selected job's label to the clipboard"},
 		{"l", "toggle log-follow pane"},
 		{"R", "refresh statuses immediately"},
 		{"?", "toggle this help"},

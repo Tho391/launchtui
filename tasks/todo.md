@@ -76,11 +76,37 @@ import redirect at `thonq/launchtui`. Surface before silently fixing.
   Lets `launchtui --version` work and gives the brew formula a clean
   smoke-test target.
 - No new Go module deps introduced (`flag` is stdlib). `go.sum` unchanged.
-- Lessons captured: none new — the standard "use GoReleaser for Go +
-  Homebrew" pattern; the only judgment call was to add the `--version`
-  flag rather than skip the brew `test do` block, because skipping a test
-  is a worse default than adding a 3-line piece of useful product
-  surface.
+
+### Follow-up: v0.1.0 first-tag fixup (same day)
+
+The first `v0.1.0` push failed CI with `j.IsAppleSystem undefined`. Root
+cause was a narrow `git add` recipe I gave (`git add main.go README.md
+tasks/todo.md .goreleaser.yml .github/`) which staged a `main.go` carrying
+pre-existing in-flight edits (`runList` calling `Job.IsAppleSystem`)
+without the matching definition in `internal/launchd/launchd.go`. The
+commit pushed was internally inconsistent.
+
+Fix landed in a follow-up commit:
+
+- Committed the entire 729-line in-flight v0.2 delta (per explicit user
+  greenlight): `internal/launchd/{control,discover,launchd,status}.go`,
+  `internal/launchd/schedule{,_test}.go` (new), `internal/ui/*.go`,
+  `internal/ui/clipboard.go` (new). All verified by
+  `go vet ./... && go test ./... && go build ./...`.
+- Re-added the lost `var version/commit/date` block + `-v|--version|version`
+  arg handler in `main.go`. Without it the `-ldflags -X main.version=...`
+  stamping in `.goreleaser.yml` was a silent no-op.
+- Migrated `.goreleaser.yml` from the deprecated `brews:` block (deprecated
+  since GoReleaser v2.10, will be removed in v3.0) to `homebrew_casks:`.
+  User-facing install command unchanged. Added a
+  `hooks.post.install` xattr-strip step so Gatekeeper doesn't reject the
+  unsigned binary with "launchtui is damaged" on first run.
+- Force-retagged `v0.1.0` to the new commit so the release workflow
+  re-runs against a clean tree.
+
+Two new lessons captured in `tasks/lessons.md`: (1) never give a narrow
+`git add` recipe without re-reading `git status` against the actual
+working tree first; (2) tokens never go into chat.
 
 ## v0.2 backlog
 

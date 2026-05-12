@@ -26,23 +26,37 @@ usage:
   launchtui list [-a]    print every discovered job to stdout
                          (label\tdomain\tstate\tplist_path)
                          -a / --all to include Apple/system jobs
+  launchtui --version    print build info and exit
   launchtui -h           this help
 `
 
+// Build-time metadata. Overridden via -ldflags -X by goreleaser; the defaults
+// keep `go run` / `go build` working without any flags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "-v", "--version", "version":
+			fmt.Printf("launchtui %s (commit %s, built %s)\n", version, commit, date)
+			return
+		case "-h", "--help", "help":
+			fmt.Print(usage)
+			return
+		}
+	}
+
 	if runtime.GOOS != "darwin" {
 		fmt.Fprintln(os.Stderr, "launchtui is macOS-only — launchd does not exist elsewhere.")
 		os.Exit(2)
 	}
 
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "list":
-			os.Exit(runList(os.Args[2:]))
-		case "-h", "--help", "help":
-			fmt.Print(usage)
-			return
-		}
+	if len(os.Args) > 1 && os.Args[1] == "list" {
+		os.Exit(runList(os.Args[2:]))
 	}
 
 	runTUI()

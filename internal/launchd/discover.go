@@ -143,5 +143,67 @@ func jobFromPlist(raw map[string]any, path string) Job {
 	case map[string]any:
 		j.KeepAlive = len(v) > 0
 	}
+	if n, ok := plistInt(raw["StartInterval"]); ok && n > 0 {
+		j.Schedule.Interval = n
+	}
+	switch v := raw["StartCalendarInterval"].(type) {
+	case map[string]any:
+		j.Schedule.Calendar = append(j.Schedule.Calendar, parseCalendarEvent(v))
+	case []any:
+		for _, item := range v {
+			if dict, ok := item.(map[string]any); ok {
+				j.Schedule.Calendar = append(j.Schedule.Calendar, parseCalendarEvent(dict))
+			}
+		}
+	}
 	return j
+}
+
+func parseCalendarEvent(dict map[string]any) CalendarEvent {
+	e := CalendarEvent{Minute: -1, Hour: -1, Day: -1, Weekday: -1, Month: -1}
+	if n, ok := plistInt(dict["Minute"]); ok {
+		e.Minute = n
+	}
+	if n, ok := plistInt(dict["Hour"]); ok {
+		e.Hour = n
+	}
+	if n, ok := plistInt(dict["Day"]); ok {
+		e.Day = n
+	}
+	if n, ok := plistInt(dict["Weekday"]); ok {
+		e.Weekday = n
+	}
+	if n, ok := plistInt(dict["Month"]); ok {
+		e.Month = n
+	}
+	return e
+}
+
+// plistInt unwraps the various integer flavours howett.net/plist may decode
+// numeric scalars into. Returns ok=false for missing or non-numeric values.
+func plistInt(v any) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case int8:
+		return int(x), true
+	case int16:
+		return int(x), true
+	case int32:
+		return int(x), true
+	case int64:
+		return int(x), true
+	case uint:
+		return int(x), true
+	case uint8:
+		return int(x), true
+	case uint16:
+		return int(x), true
+	case uint32:
+		return int(x), true
+	case uint64:
+		return int(x), true
+	default:
+		return 0, false
+	}
 }
