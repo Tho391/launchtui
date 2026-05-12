@@ -113,7 +113,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// When the filter box is focused, let it eat almost every key.
+	// When the filter box is focused, it owns most keys — but a small set
+	// of navigation / quit keys always falls through to the normal handler
+	// below so the user can browse the filtered list (and bail out) without
+	// committing the filter first. This is the fzf / k9s pattern: type to
+	// filter, arrow to browse, Enter to commit, Esc to cancel, Ctrl-C to
+	// quit. Letter keys (incl. j / k) still type into the filter so users
+	// can search for labels like "kernel".
 	if m.filtering {
 		switch msg.String() {
 		case "esc":
@@ -127,11 +133,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterInput.Blur()
 			m.rebuildList()
 			return m, nil
+		case "up", "down", "pgup", "pgdown", "ctrl+c":
+			// Fall through to the normal switch below.
+		default:
+			var cmd tea.Cmd
+			m.filterInput, cmd = m.filterInput.Update(msg)
+			m.rebuildList()
+			return m, cmd
 		}
-		var cmd tea.Cmd
-		m.filterInput, cmd = m.filterInput.Update(msg)
-		m.rebuildList()
-		return m, cmd
 	}
 
 	switch {

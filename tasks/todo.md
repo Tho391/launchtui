@@ -402,3 +402,68 @@ with a cycling key.
   this build, so per AGENTS.md rule #3 ("after ANY correction from the
   user") there was nothing to record.
 
+## Bug: sticky filter mode eats every keystroke (2026-05-12)
+
+### Report
+
+> "there is a bug, filter text is not display, after i enter some text
+> to search other function shortcut not work"
+
+### Investigation
+
+Built a small headless harness (`cmd/repro`) that drives `*ui.Model`
+straight through `tea.KeyMsg` calls, dumps `View()` after each step,
+and checks every transition.
+
+- Filter text **does render correctly** when typed. `m.filterInput.View()`
+  emits prompt + value + reverse-video cursor over the default
+  foreground; verified at both `termenv.Ascii` and `termenv.TrueColor`
+  profiles. The theme refactor in `1490af3` didn't touch the
+  `if m.filtering` branch in `view.go` — so symptom 1 ("filter text is
+  not display") is **not** a theme regression.
+- `Esc` and `Enter` **do** exit filter mode (verified with KeyEscape /
+  KeyEnter messages).
+- Root cause of "shortcuts don't work after typing": `handleKey`'s
+  filter block routes **every** non-Esc/non-Enter key into
+  `m.filterInput.Update(msg)`. Arrow-down, page-down, ctrl-c, etc. are
+  swallowed. The user sees their typed text fine, but the moment they
+  try to navigate the filtered list they're stuck typing.
+- Symptom 1 is almost certainly an indirect consequence: when the user
+  presses `j`/`s`/`r` expecting normal-mode behaviour, those letters
+  get appended to the filter (`abcdejsr`), the filtered list narrows
+  to zero matches, and the user perceives this as "filter text not
+  displayed" (i.e. results not shown). Same root cause; one fix.
+
+### Fix
+
+Single-file change in `internal/ui/update.go`:
+
+- In the `if m.filtering` block, let true navigation keys (`up`,
+  `down`, `pgup`, `pgdown`) **and** `ctrl+c` fall through to the
+  bottom `switch` so they hit the existing `Up` / `Down` / `PageUp` /
+  `PageDn` / `Quit` handlers.
+- Everything else still goes to `m.filterInput.Update(msg)` — typing
+  letters (including `j` and `k`) still types into the filter.
+- Esc and Enter still exit filter mode unchanged.
+
+This is the fzf / k9s pattern: type to filter, arrow to browse, Enter
+to commit, Esc to cancel, Ctrl-C to bail. No new state, no new keys,
+no theme changes.
+
+### Second bug surfaced, not fixed here
+
+The header shows `filter: <q>  (esc to clear)` when a filter is
+committed but filter mode is inactive — but the `esc` key has no
+binding in normal mode, so pressing Esc does nothing. The hint lies.
+Surfaced to parent; out of scope for this fix.
+
+### Verification
+
+- `go vet ./... && go test ./... && go build ./...` — pass.
+- Headless harness confirms after the fix:
+  - typing letters still inserts into the filter,
+  - `up` / `down` / `pgup` / `pgdown` move the cursor in the
+    filtered list **while still in filter mode**,
+  - `ctrl+c` quits cleanly while filtering,
+  - Esc / Enter still exit filter mode.
+

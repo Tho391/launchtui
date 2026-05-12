@@ -33,3 +33,17 @@ Append a bullet here every time the user corrects course. Keep entries terse
   upstream; any credential that touches one is compromised. Tokens go into
   GitHub Actions secrets (or the equivalent secret store) via the host UI,
   not into chat, not into source files, not into commit messages.
+- **"All keys go to the text input while filter is focused" is a sticky-mode
+  bug, not a feature.** Users press `/`, type, then expect `j`/`k`/arrows /
+  ctrl+c to still do their normal thing. The fzf / k9s pattern is the
+  right default: Esc cancels, Enter commits, arrow / pgup / pgdn navigate
+  the filtered list, Ctrl-C quits — only printable runes (and editing
+  shortcuts) reach the textinput. Whenever a modal/focused widget eats
+  keys, enumerate the bypass set explicitly; never let a TUI widget
+  shadow Quit.
+- **Headless harnesses beat blind theme blame.** When a TUI bug report
+  points at a recent rendering refactor, build a one-shot
+  `cmd/<x>/main.go` that drives `*Model` through `Update` / `View` and
+  dumps the result with `q`-quoted ANSI before touching styles. It took
+  ten minutes here to confirm the theme refactor was a red herring and
+  the real bug was state-machine routing.
