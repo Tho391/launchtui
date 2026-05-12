@@ -1,0 +1,23 @@
+# Binaries
+launchtui
+/dist/
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Coverage
+coverage.out
+coverage.html
+
+# Local Go module/build caches (used only inside sandboxed CI)
+.gomodcache/
+.gocache/
