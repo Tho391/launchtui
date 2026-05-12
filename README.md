@@ -20,8 +20,11 @@ log files in a pane. No mouse. No sudo prompts. Single static binary.
 # If you don't have a Go toolchain installed yet, add one via mise:
 mise use -g go@latest
 
-# Build a static binary:
-cd /Users/thonq/Projects/Personal/launchtui
+# Install straight from the module path:
+go install github.com/thonq/launchtui@latest
+
+# Or build from source:
+cd path/to/launchtui
 go build -o launchtui .
 
 # Or run straight from source:
@@ -112,6 +115,17 @@ Big Sur and newer and cannot be modified at all.
 - Auto-refresh every 5 seconds.
 
 See [`PLAN.md`](./PLAN.md) for the full feature inventory and v0.2 ideas.
+
+## Development
+
+```bash
+go vet ./...      # static checks
+go test ./...     # unit tests (fixture-based, see internal/launchd/parse_test.go)
+go build ./...    # compile everything
+```
+
+All three should pass before opening a commit. See [`AGENTS.md`](./AGENTS.md)
+for the full contributor / agent conventions.
 
 ## v0.2 and beyond
 
