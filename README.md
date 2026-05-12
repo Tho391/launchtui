@@ -10,7 +10,22 @@ log files in a pane. No mouse. No sudo prompts. Single static binary.
 
 ---
 
-## Install / build
+## Install
+
+### Homebrew (recommended)
+
+```bash
+brew install Tho391/tap/launchtui
+```
+
+This pulls the latest tagged release from the
+[`Tho391/homebrew-tap`](https://github.com/Tho391/homebrew-tap) tap, where the
+formula is kept in sync by GoReleaser on every release tag. Pre-built binaries
+are published for `darwin/amd64` and `darwin/arm64`.
+
+Upgrade with `brew upgrade launchtui`, uninstall with `brew uninstall launchtui`.
+
+### From source
 
 `launchtui` is written in Go 1.22+ and depends only on
 [Charm](https://charm.sh/) (bubbletea / bubbles / lipgloss) and
@@ -125,7 +140,52 @@ go build ./...    # compile everything
 ```
 
 All three should pass before opening a commit. See [`AGENTS.md`](./AGENTS.md)
-for the full contributor / agent conventions.
+for the full contributor / agent conventions. The same three commands run on
+every push and pull request via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Cutting a release
+
+Releases are fully automated via [GoReleaser](https://goreleaser.com/) — see
+[`.goreleaser.yml`](./.goreleaser.yml) and
+[`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+The release workflow then:
+
+1. Cross-compiles `darwin/amd64` and `darwin/arm64` binaries with `-trimpath`
+   and stamps `main.version`, `main.commit`, and `main.date` via `-ldflags -X`.
+2. Bundles each binary with `LICENSE` and `README.md` into a `tar.gz`.
+3. Generates `checksums.txt` (SHA-256) and publishes everything as a GitHub
+   Release with a Conventional-Commits-filtered changelog.
+4. Writes `Formula/launchtui.rb` to
+   [`Tho391/homebrew-tap`](https://github.com/Tho391/homebrew-tap), so
+   `brew install Tho391/tap/launchtui` picks up the new version on the next
+   `brew update`.
+
+Pre-release tags such as `v0.1.0-rc1` are auto-flagged as GitHub prereleases.
+
+#### One-time release setup
+
+Before the first tag push, you need:
+
+1. A public `Tho391/homebrew-tap` repository (empty is fine; GoReleaser
+   creates the `Formula/` directory on first run).
+2. A repository secret named `HOMEBREW_TAP_TOKEN` containing a Personal
+   Access Token with `repo` scope on `Tho391/homebrew-tap` (or a
+   fine-grained PAT with `Contents: read & write` scoped only to that repo).
+
+#### Local dry-run
+
+```bash
+goreleaser release --snapshot --clean --skip=publish
+```
+
+Outputs to `dist/`, doesn't push anywhere — handy for sanity-checking
+`.goreleaser.yml` changes before tagging.
 
 ## v0.2 and beyond
 

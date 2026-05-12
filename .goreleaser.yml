@@ -1,0 +1,89 @@
+# GoReleaser config — see https://goreleaser.com/customization/
+#
+# Run by .github/workflows/release.yml on tag push (v*).
+# Local dry-run:  goreleaser release --snapshot --clean --skip=publish
+version: 2
+
+project_name: launchtui
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: launchtui
+    binary: launchtui
+    main: ./
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    # Reproducible builds: stamp every file in the archive with the commit
+    # timestamp instead of `now`, so the tarballs are byte-identical across
+    # re-runs of the same tag.
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: launchtui
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    formats:
+      - tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'Merge pull request'
+      - 'Merge branch'
+
+release:
+  github:
+    owner: Tho391
+    name: launchtui
+  draft: false
+  # Tags like v0.1.0-rc1 / v0.1.0-beta.2 ship as GitHub prereleases automatically.
+  prerelease: auto
+
+brews:
+  - name: launchtui
+    repository:
+      owner: Tho391
+      name: homebrew-tap
+      branch: main
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+    directory: Formula
+    homepage: 'https://github.com/Tho391/launchtui'
+    description: 'Fast, keyboard-driven terminal UI for managing launchd jobs on macOS.'
+    license: MIT
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: 'chore(brew): bump launchtui to {{ .Tag }}'
+    install: |
+      bin.install "launchtui"
+    test: |
+      assert_match "launchtui", shell_output("#{bin}/launchtui --version")
