@@ -86,11 +86,13 @@ type Model struct {
 	filterInput   textinput.Model
 	filtering     bool
 
-	// View knobs cycled by A / F / O — all persist for the session only.
+	// View knobs cycled by A / F / O / T — all persist for the session only.
 	hideApple        bool
 	hiddenAppleCount int
 	statusFilter     statusFilter
 	sortMode         sortMode
+	theme            *Theme
+	themeIdx         int
 
 	// Confirmation modal for control actions. When pendingAction is
 	// non-empty the modal is visible and the key handler is gated so the
@@ -145,6 +147,7 @@ func NewModel() (*Model, error) {
 		logLines:    make(map[string][]string),
 		filterInput: ti,
 		hideApple:   true,
+		theme:       defaultTheme(),
 	}
 	m.rebuildList()
 	return m, nil

@@ -24,6 +24,7 @@ type keyMap struct {
 	ToggleApple  key.Binding
 	StatusFilter key.Binding
 	SortCycle    key.Binding
+	Theme        key.Binding
 	Reveal       key.Binding
 	Edit         key.Binding
 	Yank         key.Binding
@@ -52,6 +53,7 @@ func defaultKeyMap() keyMap {
 		ToggleApple:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "toggle Apple")),
 		StatusFilter: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter state")),
 		SortCycle:    key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "sort")),
+		Theme:        key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "cycle theme")),
 		Reveal:       key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "reveal in Finder")),
 		Edit:         key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "view plist in $EDITOR")),
 		Yank:         key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank label")),

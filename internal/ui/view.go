@@ -16,6 +16,9 @@ import (
 //   - an optional log pane stacked below the detail
 //   - a footer keybinding bar
 //   - a centred help overlay when m.showHelp
+//
+// All colour and weight comes from m.theme so the entire screen can be
+// re-skinned by cycling allThemes.
 func (m *Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "loading…"
@@ -58,15 +61,15 @@ func (m *Model) View() string {
 
 func (m *Model) renderConfirm() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", styleTitle.Render("confirm: "+m.pendingAction))
-	fmt.Fprintf(&b, "%s %s\n\n", styleKey.Render("job"), m.pendingJob.Label)
-	fmt.Fprintf(&b, "%s %s\n\n", styleKey.Render("cmd"), m.pendingPreview)
-	b.WriteString(styleSubtle.Render("y / Enter confirm   ·   n / Esc cancel"))
-	return styleBorder.Padding(1, 2).Render(b.String())
+	fmt.Fprintf(&b, "%s\n\n", m.theme.Title.Render("confirm: "+m.pendingAction))
+	fmt.Fprintf(&b, "%s %s\n\n", m.theme.Key.Render("job"), m.pendingJob.Label)
+	fmt.Fprintf(&b, "%s %s\n\n", m.theme.Key.Render("cmd"), m.pendingPreview)
+	b.WriteString(m.theme.Subtle.Render("y / Enter confirm   ·   n / Esc cancel"))
+	return m.theme.Modal.Render(b.String())
 }
 
 func (m *Model) renderHeader() string {
-	title := styleTitle.Render("launchtui")
+	title := m.theme.Title.Render("launchtui")
 	visible := fmt.Sprintf("%d / %d", len(m.filtered), len(m.jobs))
 
 	badges := []string{"jobs: " + visible}
@@ -79,15 +82,16 @@ func (m *Model) renderHeader() string {
 	if m.hideApple && m.hiddenAppleCount > 0 {
 		badges = append(badges, fmt.Sprintf("%d hidden (A to show)", m.hiddenAppleCount))
 	}
-	counts := styleSubtle.Render(strings.Join(badges, "  ·  "))
+	badges = append(badges, "theme: "+m.theme.Name)
+	counts := m.theme.Subtle.Render(strings.Join(badges, "  ·  "))
 
 	var filterView string
 	if m.filtering {
 		filterView = m.filterInput.View()
 	} else if q := m.filterInput.Value(); q != "" {
-		filterView = styleSubtle.Render("filter: " + q + "  (esc to clear)")
+		filterView = m.theme.Subtle.Render("filter: " + q + "  (esc to clear)")
 	} else {
-		filterView = styleSubtle.Render("press / to filter")
+		filterView = m.theme.Subtle.Render("press / to filter")
 	}
 
 	spacer := strings.Repeat(" ", maxInt(1, m.width-lipgloss.Width(title)-lipgloss.Width(filterView)-lipgloss.Width(counts)-4))
@@ -96,8 +100,8 @@ func (m *Model) renderHeader() string {
 
 func (m *Model) renderList(width, height int) string {
 	if len(m.filtered) == 0 {
-		empty := styleSubtle.Render("no jobs match this filter")
-		return styleBorder.Width(width).Height(height).Render(empty)
+		empty := m.theme.Subtle.Render("no jobs match this filter")
+		return m.theme.Border.Width(width).Height(height).Render(empty)
 	}
 
 	// Scroll window around the cursor.
@@ -125,7 +129,7 @@ func (m *Model) renderList(width, height int) string {
 				st.State = launchd.StateProtected
 			}
 		}
-		badge := renderBadge(st.State)
+		badge := m.theme.Badge(st.State)
 		var trailer string
 		if st.State == launchd.StateCrashed && st.LastExitCode != 0 {
 			trailer = fmt.Sprintf(" (%d)", st.LastExitCode)
@@ -143,28 +147,28 @@ func (m *Model) renderList(width, height int) string {
 		if len(label) > maxLabelWidth {
 			label = label[:maxLabelWidth-1] + "…"
 		}
-		line := badge + " " + label + styleSubtle.Render(trailer)
+		line := badge + " " + label + m.theme.Subtle.Render(trailer)
 		if i == m.cursor {
-			line = styleSelected.Render("▸ " + line)
+			line = m.theme.Selected.Render("▸ " + line)
 		} else {
 			line = "  " + line
 		}
 		lines = append(lines, line)
 	}
 	body := strings.Join(lines, "\n")
-	return styleBorder.Width(width).Height(height).Render(body)
+	return m.theme.Border.Width(width).Height(height).Render(body)
 }
 
 func (m *Model) renderDetail(width, height int) string {
 	j := m.selectedJob()
 	if j == nil {
-		return styleBorder.Width(width).Height(height).Render(styleSubtle.Render("nothing selected"))
+		return m.theme.Border.Width(width).Height(height).Render(m.theme.Subtle.Render("nothing selected"))
 	}
 	st := m.status[j.Label]
 
 	var b strings.Builder
 	row := func(k, v string) {
-		fmt.Fprintf(&b, "%s %s\n", styleKey.Render(fmt.Sprintf("%-9s", k)), v)
+		fmt.Fprintf(&b, "%s %s\n", m.theme.Key.Render(fmt.Sprintf("%-9s", k)), v)
 	}
 	row("Label", j.Label)
 	row("Plist", j.PlistPath)
@@ -174,7 +178,7 @@ func (m *Model) renderDetail(width, height int) string {
 		prog = strings.Join(j.ProgramArgs, " ")
 	}
 	row("Program", prog)
-	row("State", renderStateText(st.State))
+	row("State", m.theme.StateText(st.State))
 	pidStr := "—"
 	if st.PID > 0 {
 		pidStr = fmt.Sprintf("%d", st.PID)
@@ -197,14 +201,14 @@ func (m *Model) renderDetail(width, height int) string {
 
 	if !m.flashUntil.IsZero() && time.Now().Before(m.flashUntil) {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(m.flashMsg))
+		b.WriteString(m.theme.Flash.Render(m.flashMsg))
 	}
 
 	if m.showLog && m.tailFor == j.Label {
 		b.WriteString("\n")
-		b.WriteString(styleSubtle.Render(strings.Repeat("─", maxInt(8, width-4))))
+		b.WriteString(m.theme.Subtle.Render(strings.Repeat("─", maxInt(8, width-4))))
 		b.WriteString("\n")
-		b.WriteString(styleKey.Render("log tail (l to close)"))
+		b.WriteString(m.theme.Key.Render("log tail (l to close)"))
 		b.WriteString("\n")
 		// Show only the last (height-currentRowCount) lines so we don't blow
 		// past the pane height; lipgloss will clip the rest but truncating
@@ -218,32 +222,33 @@ func (m *Model) renderDetail(width, height int) string {
 			lines = lines[len(lines)-max:]
 		}
 		if len(lines) == 0 {
-			b.WriteString(styleSubtle.Render("…waiting for output…"))
+			b.WriteString(m.theme.Subtle.Render("…waiting for output…"))
 		} else {
-			b.WriteString(strings.Join(lines, "\n"))
+			b.WriteString(m.theme.LogLine.Render(strings.Join(lines, "\n")))
 		}
 	}
 
-	return styleBorder.Width(width).Height(height).Render(b.String())
+	return m.theme.Border.Width(width).Height(height).Render(b.String())
 }
 
 func (m *Model) renderFooter() string {
 	parts := []string{
-		styleKey.Render("j/k") + " move",
-		styleKey.Render("s/S/r") + " start/stop/restart",
-		styleKey.Render("L/U") + " load/unload",
-		styleKey.Render("o") + " reveal",
-		styleKey.Render("e") + " edit",
-		styleKey.Render("y") + " yank",
-		styleKey.Render("l") + " log",
-		styleKey.Render("/") + " filter",
-		styleKey.Render("F") + " state",
-		styleKey.Render("O") + " sort",
-		styleKey.Render("A") + " apple",
-		styleKey.Render("?") + " help",
-		styleKey.Render("q") + " quit",
+		m.theme.Key.Render("j/k") + " move",
+		m.theme.Key.Render("s/S/r") + " start/stop/restart",
+		m.theme.Key.Render("L/U") + " load/unload",
+		m.theme.Key.Render("o") + " reveal",
+		m.theme.Key.Render("e") + " edit",
+		m.theme.Key.Render("y") + " yank",
+		m.theme.Key.Render("l") + " log",
+		m.theme.Key.Render("/") + " filter",
+		m.theme.Key.Render("F") + " state",
+		m.theme.Key.Render("O") + " sort",
+		m.theme.Key.Render("A") + " apple",
+		m.theme.Key.Render("T") + " theme",
+		m.theme.Key.Render("?") + " help",
+		m.theme.Key.Render("q") + " quit",
 	}
-	return styleSubtle.Render(strings.Join(parts, "  "))
+	return m.theme.Subtle.Render(strings.Join(parts, "  "))
 }
 
 func (m *Model) renderHelp() string {
@@ -256,6 +261,7 @@ func (m *Model) renderHelp() string {
 		{"F", "cycle status filter (all → running → crashed → throttled → scheduled → protected)"},
 		{"O", "cycle sort (label → state → domain → last-exit)"},
 		{"A", "toggle Apple / system jobs (hidden by default)"},
+		{"T", "cycle theme (Aurora → Mocha → High-Contrast)"},
 		{"s", "start the selected job (with confirmation)"},
 		{"S", "stop the selected job (with confirmation)"},
 		{"r", "restart the selected job (with confirmation)"},
@@ -270,16 +276,16 @@ func (m *Model) renderHelp() string {
 		{"q / ^C", "quit"},
 	}
 	var b strings.Builder
-	b.WriteString(styleTitle.Render("launchtui — help"))
+	b.WriteString(m.theme.Title.Render("launchtui — help"))
 	b.WriteString("\n\n")
 	for _, kb := range bindings {
-		fmt.Fprintf(&b, "  %s   %s\n", styleKey.Render(fmt.Sprintf("%-10s", kb.k)), styleHelpDesc.Render(kb.d))
+		fmt.Fprintf(&b, "  %s   %s\n", m.theme.Key.Render(fmt.Sprintf("%-10s", kb.k)), m.theme.HelpDesc.Render(kb.d))
 	}
 	b.WriteString("\n")
-	b.WriteString(styleSubtle.Render("System daemons (◆) are listed read-only. To control them, run\n  `sudo launchctl bootout|bootstrap|kickstart system/<label>` manually."))
+	b.WriteString(m.theme.Subtle.Render("System daemons (◆) are listed read-only. To control them, run\n  `sudo launchctl bootout|bootstrap|kickstart system/<label>` manually."))
 	b.WriteString("\n\n")
-	b.WriteString(styleSubtle.Render("press ? again to dismiss"))
-	return styleBorder.Width(m.width - 4).Render(b.String())
+	b.WriteString(m.theme.Subtle.Render("press ? again to dismiss"))
+	return m.theme.Border.Width(m.width - 4).Render(b.String())
 }
 
 func maxInt(a, b int) int {

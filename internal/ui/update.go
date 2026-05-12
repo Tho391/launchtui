@@ -213,6 +213,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.flash("sort: " + m.sortMode.String())
 		return m, nil
 
+	case key.Matches(msg, m.keys.Theme):
+		m.themeIdx = (m.themeIdx + 1) % len(allThemes)
+		m.theme = allThemes[m.themeIdx]
+		m.flash("theme: " + m.theme.Name)
+		return m, nil
+
 	case key.Matches(msg, m.keys.Refresh):
 		return m, refreshAllCmd(m.jobs)
 

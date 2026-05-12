@@ -122,7 +122,8 @@ Pulled from `PLAN.md` §4 ("Stretch goals (v0.2+)"). Promote items into the
 - [ ] Override-database awareness — `enable` / `disable` that persists across
       reboots, with a visible toggle in the row.
 - [ ] Crontab import / `cron2launchd`-style helper.
-- [ ] Theme support (lipgloss palette swap), optional mouse support.
+- [x] Theme support (lipgloss palette swap) — done 2026-05-12. See "Theme
+      system" review below. Mouse support still open.
 
 ## Feature ideas from pylaunchd + LaunchDeck (research 2026-05-12)
 
@@ -351,4 +352,53 @@ confirming the new state classifier works end-to-end.
 **Lessons captured:** appended three entries to `tasks/lessons.md`
 (plist integer decoding, `StartCalendarInterval` polymorphism,
 `tea.ExecProcess` for shell-outs that need the alt screen).
+
+## Theme system (2026-05-12)
+
+Promoted from the v0.2 backlog by an explicit user request: "improve it,
+add colors, theme to launchtui". Shipped a one-struct, three-theme palette
+with a cycling key.
+
+### What shipped
+
+- `internal/ui/styles.go` rewritten around a single `Theme` struct
+  carrying every surface (`Title`, `Subtle`, `Selected`, `Key`,
+  `HelpDesc`, `Border`, `Modal`, `Flash`, `LogLine`) plus a
+  `map[launchd.State]lipgloss.Style`. Old free-function `renderBadge` /
+  `renderStateText` became `(*Theme).Badge` / `(*Theme).StateText`.
+  `badgeGlyph()` is theme-independent — only colour and weight change.
+- Three concrete themes: **Aurora** (default; violet on midnight,
+  GitHub-Dark-family state colours), **Mocha** (mauve + teal pastel,
+  Catppuccin-family vibe but renamed to avoid trademark conflation),
+  **High-Contrast** (pure CMYK on white text for accessibility).
+- `Model` gained `theme *Theme` + `themeIdx int`. Initialised to
+  `defaultTheme()` (= Aurora) in `NewModel`.
+- New `T` keybinding cycles `allThemes` (`A`/`F`/`O`/`L`/`U`/`R` were
+  the only existing caps; `T` was free). Handler in `update.go` flashes
+  `"theme: <Name>"`. Footer and `?` help overlay both call it out.
+- Badges now use bold weight where it carries meaning: running (bold
+  green), crashed (bold red), throttled (bold amber). Loaded /
+  stopped / protected / scheduled stay flat so they don't shout.
+- The header pill now always shows `theme: <Name>` so the user can
+  glance up and see which theme is active even after the flash fades.
+
+### Verification
+
+`go vet ./...`, `go test ./...`, `go build ./...` all green.
+`internal/launchd` tests still pass; UI has no tests in v0.1 per
+`AGENTS.md`. No new module deps (lipgloss was already in `go.mod`).
+
+### Judgment calls worth surfacing
+
+- **Modal got its own style** (`Theme.Modal`) instead of reusing
+  `Border`, so the confirmation dialog picks up the accent colour on
+  its border instead of the dim chrome colour. Reads as more
+  "important" without going loud.
+- **No background colours.** Lipgloss styles only set foreground; the
+  terminal's own background shows through. This is the standard TUI
+  posture and avoids fighting the user's terminal theme. High-Contrast
+  bets on bold + bright primaries rather than reversed blocks.
+- **No `tasks/lessons.md` update** — nothing corrective came up during
+  this build, so per AGENTS.md rule #3 ("after ANY correction from the
+  user") there was nothing to record.
 
